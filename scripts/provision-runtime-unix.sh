@@ -29,33 +29,48 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$(dirname "$ROOT")"
 rm -rf "$ROOT"
 
-if ! command -v micromamba >/dev/null 2>&1; then
-  echo "micromamba is required on the PATH" >&2
+ENV_MANAGER=""
+if command -v micromamba >/dev/null 2>&1; then
+  ENV_MANAGER="micromamba"
+elif command -v mamba >/dev/null 2>&1; then
+  ENV_MANAGER="mamba"
+elif command -v conda >/dev/null 2>&1; then
+  ENV_MANAGER="conda"
+else
+  echo "micromamba, mamba, or conda is required on the PATH" >&2
   exit 1
 fi
 
+create_env() {
+  "$ENV_MANAGER" create -y -p "$ROOT" -c conda-forge "$@"
+}
+
+run_in_env() {
+  "$ENV_MANAGER" run -p "$ROOT" "$@"
+}
+
 case "$PLATFORM" in
   darwin-* )
-    micromamba create -y -p "$ROOT" -c conda-forge \
+    create_env \
       "python=${PYTHON_VERSION}" \
-      "manim=${MANIM_VERSION}" \
       "ffmpeg" \
       "pip" \
-      "pyav" \
       "pkg-config" \
       "cairo" \
-      "pango"
+      "pango" \
+      "pycairo" \
+      "zlib"
     ;;
   linux-* )
-    micromamba create -y -p "$ROOT" -c conda-forge \
+    create_env \
       "python=${PYTHON_VERSION}" \
-      "manim=${MANIM_VERSION}" \
       "ffmpeg" \
       "pip" \
-      "pyav" \
       "pkg-config" \
       "cairo" \
-      "pango"
+      "pango" \
+      "pycairo" \
+      "zlib"
     ;;
   * )
     echo "Unsupported unix platform: $PLATFORM" >&2
@@ -63,20 +78,20 @@ case "$PLATFORM" in
     ;;
 esac
 
-micromamba run -p "$ROOT" python -m pip install -r "$REPO_ROOT/python/requirements/runtime-bridge.txt"
+run_in_env python -m pip install "av" "manim==${MANIM_VERSION}" -r "$REPO_ROOT/python/requirements/runtime-bridge.txt"
 
-micromamba run -p "$ROOT" python --version
-micromamba run -p "$ROOT" manim --version
-micromamba run -p "$ROOT" ffmpeg -version
-micromamba run -p "$ROOT" ffprobe -version
-micromamba run -p "$ROOT" python -c "import manim"
+run_in_env python --version
+run_in_env manim --version
+run_in_env ffmpeg -version
+run_in_env ffprobe -version
+run_in_env python -c "import manim"
 
 OPENGL=false
-if micromamba run -p "$ROOT" python -c "import moderngl, manim" >/dev/null 2>&1; then
+if run_in_env python -c "import moderngl, manim; moderngl.create_context(standalone=True)" >/dev/null 2>&1; then
   OPENGL=true
 fi
 
-micromamba run -p "$ROOT" manim -ql "$REPO_ROOT/examples/hello.py" HelloScene --renderer cairo >/dev/null 2>&1
+run_in_env manim -ql "$REPO_ROOT/examples/hello.py" HelloScene --renderer cairo >/dev/null 2>&1
 
 node "$REPO_ROOT/scripts/write-runtime-metadata.mjs" \
   --runtime-root "$ROOT" \

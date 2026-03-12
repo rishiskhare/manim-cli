@@ -20,12 +20,12 @@ if (Test-Path $RuntimeRoot) {
 
 micromamba create -y -p $RuntimeRoot -c conda-forge `
   "python=$PythonVersion" `
-  "manim=$ManimVersion" `
   "ffmpeg" `
   "pip" `
-  "pyav"
+  "pycairo" `
+  "zlib"
 
-micromamba run -p $RuntimeRoot python -m pip install -r (Join-Path $RepoRoot "python/requirements/runtime-bridge.txt")
+micromamba run -p $RuntimeRoot python -m pip install "av" "manim==$ManimVersion" -r (Join-Path $RepoRoot "python/requirements/runtime-bridge.txt")
 
 micromamba run -p $RuntimeRoot python --version
 micromamba run -p $RuntimeRoot manim --version
@@ -35,7 +35,7 @@ micromamba run -p $RuntimeRoot python -c "import manim"
 
 $openGl = "false"
 try {
-  micromamba run -p $RuntimeRoot python -c "import moderngl, manim" | Out-Null
+  micromamba run -p $RuntimeRoot python -c "import moderngl, manim; moderngl.create_context(standalone=True)" | Out-Null
   $openGl = "true"
 } catch {
   $openGl = "false"

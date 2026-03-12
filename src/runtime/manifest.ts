@@ -13,6 +13,7 @@ export type RuntimeBundle = {
   sha256: string;
   minimumCliVersion: string;
   archiveType?: "tar.gz" | "zip";
+  installStrategy?: "archive" | "bootstrap";
 };
 
 export type RuntimeManifest = {

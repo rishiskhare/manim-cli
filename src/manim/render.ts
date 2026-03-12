@@ -2,6 +2,7 @@ import path from "node:path";
 import { CliError } from "../errors.js";
 import { execFile } from "../utils/process.js";
 import { getManagedManimBin, bootstrapRuntime } from "../runtime/python.js";
+import { getManagedRuntimeEnv } from "../runtime/locator.js";
 import { probeManagedRuntime } from "../runtime/probe.js";
 import { mapManimOptionsToArgs, type RenderOptions } from "./options.js";
 import type { ProgressReporter } from "../ui/progress.js";
@@ -26,6 +27,7 @@ export async function renderManimFile(
   }
   reporter?.step("Invoking Manim Community renderer", options.renderer ?? "cairo");
   const manimBin = await getManagedManimBin();
+  const env = await getManagedRuntimeEnv();
   const commandArgs = [
     ...mapManimOptionsToArgs(options),
     path.resolve(cwd, file),
@@ -33,6 +35,7 @@ export async function renderManimFile(
   ];
   const result = await execFile(manimBin, commandArgs, {
     cwd,
+    env,
     stdout: "inherit",
     stderr: "inherit",
     allowFailure: true

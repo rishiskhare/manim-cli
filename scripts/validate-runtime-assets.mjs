@@ -31,6 +31,9 @@ for (const bundle of manifest.bundles) {
   if (!/^[a-f0-9]{64}$/i.test(bundle.sha256)) {
     throw new Error(`runtime bundle checksum is invalid for ${bundle.platform}`);
   }
+  if (bundle.installStrategy && !["archive", "bootstrap"].includes(bundle.installStrategy)) {
+    throw new Error(`runtime bundle install strategy is invalid for ${bundle.platform}: ${bundle.installStrategy}`);
+  }
   if (manifest.channel === "stable" && bundle.minimumCliVersion !== manifest.bundles[0].minimumCliVersion) {
     throw new Error(`runtime bundle minimum CLI versions must match in stable manifest: ${bundle.platform}`);
   }

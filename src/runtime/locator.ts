@@ -42,6 +42,40 @@ export async function loadRuntimeMetadata(installDir?: string): Promise<RuntimeM
   return readJsonFile<RuntimeMetadata>(runtimeJson);
 }
 
+function withPrependedPath(current: string | undefined, entries: string[]): string {
+  const unique = new Set(entries.filter(Boolean));
+  if (current) {
+    for (const part of current.split(path.delimiter)) {
+      if (part) {
+        unique.add(part);
+      }
+    }
+  }
+  return Array.from(unique).join(path.delimiter);
+}
+
+export async function getManagedRuntimeEnv(installDir?: string): Promise<NodeJS.ProcessEnv> {
+  const root = installDir ?? await getInstalledRuntimeRoot();
+  const metadata = await loadRuntimeMetadata(root);
+  const binaryDirs = new Set<string>([
+    path.dirname(path.join(root, metadata.binaries.python)),
+    path.dirname(path.join(root, metadata.binaries.pip)),
+    path.dirname(path.join(root, metadata.binaries.manim)),
+    path.dirname(path.join(root, metadata.binaries.ffmpeg)),
+    path.dirname(path.join(root, metadata.binaries.ffprobe))
+  ]);
+  const libDir = path.join(root, "lib");
+
+  return {
+    ...process.env,
+    PATH: withPrependedPath(process.env.PATH, Array.from(binaryDirs)),
+    CONDA_PREFIX: root,
+    CONDA_DEFAULT_ENV: root,
+    DYLD_FALLBACK_LIBRARY_PATH: withPrependedPath(process.env.DYLD_FALLBACK_LIBRARY_PATH, [libDir]),
+    LD_LIBRARY_PATH: withPrependedPath(process.env.LD_LIBRARY_PATH, [libDir])
+  };
+}
+
 export async function getManagedBinary(name: keyof RuntimeMetadata["binaries"]): Promise<string> {
   const root = await getInstalledRuntimeRoot();
   const metadata = await loadRuntimeMetadata(root);

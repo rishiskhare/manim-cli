@@ -19,6 +19,7 @@ const version = arg("--version");
 const channel = arg("--channel") ?? "stable";
 const minimumCliVersion = arg("--minimum-cli-version") ?? version;
 const outPath = path.resolve(arg("--out") ?? path.join("runtime", "runtime-manifest.json"));
+const installStrategy = arg("--install-strategy") ?? "archive";
 
 const resolvedBaseUrl = baseUrl ?? (githubRepo && releaseTag ? `https://github.com/${githubRepo}/releases/download/${releaseTag}` : undefined);
 
@@ -45,11 +46,12 @@ for (const entry of entries) {
   bundles.push({
     version,
     platform,
-    archiveUrl: `${resolvedBaseUrl.replace(/\/$/, "")}/${entry}`,
-    sha256,
-    minimumCliVersion,
-    archiveType
-  });
+      archiveUrl: `${resolvedBaseUrl.replace(/\/$/, "")}/${entry}`,
+      sha256,
+      minimumCliVersion,
+      archiveType,
+      installStrategy
+    });
 }
 
 bundles.sort((left, right) => left.platform.localeCompare(right.platform));

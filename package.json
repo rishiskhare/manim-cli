@@ -18,6 +18,7 @@
     "test": "vitest run",
     "dev": "tsx src/bin.ts",
     "runtime:metadata": "node scripts/write-runtime-metadata.mjs",
+    "runtime:bundle": "node scripts/prepare-runtime-bundle.mjs",
     "runtime:pack": "node scripts/pack-runtime.mjs",
     "runtime:manifest": "node scripts/generate-runtime-manifest.mjs",
     "runtime:validate": "node scripts/validate-runtime-assets.mjs",

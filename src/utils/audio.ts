@@ -1,10 +1,11 @@
 import { execFile } from "./process.js";
-import { getManagedFfprobeBin } from "../runtime/locator.js";
+import { getManagedFfprobeBin, getManagedRuntimeEnv } from "../runtime/locator.js";
 import { runPythonBridge } from "../runtime/python.js";
 
 export async function getMediaDurationSeconds(filePath: string): Promise<number> {
   try {
     const ffprobe = await getManagedFfprobeBin();
+    const env = await getManagedRuntimeEnv();
     const result = await execFile(
       ffprobe,
       [
@@ -16,7 +17,7 @@ export async function getMediaDurationSeconds(filePath: string): Promise<number>
         "default=noprint_wrappers=1:nokey=1",
         filePath
       ],
-      { allowFailure: true }
+      { allowFailure: true, env }
     );
     const parsed = Number(result.stdout.trim());
     if (!Number.isNaN(parsed) && parsed > 0) {
@@ -32,6 +33,7 @@ export async function getMediaDurationSeconds(filePath: string): Promise<number>
 
 export async function getVideoDimensions(filePath: string): Promise<{ width: number; height: number }> {
   const ffprobe = await getManagedFfprobeBin();
+  const env = await getManagedRuntimeEnv();
   const result = await execFile(
     ffprobe,
     [
@@ -44,7 +46,8 @@ export async function getVideoDimensions(filePath: string): Promise<{ width: num
       "-of",
       "csv=p=0:s=x",
       filePath
-    ]
+    ],
+    { env }
   );
   const [width, height] = result.stdout.trim().split("x").map((value) => Number(value));
   return { width, height };

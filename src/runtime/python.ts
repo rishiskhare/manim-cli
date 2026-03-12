@@ -11,7 +11,7 @@ import { getPackageRoot } from "../utils/packageRoot.js";
 import type { ProgressReporter } from "../ui/progress.js";
 import { installRuntimeBundle, repairInstalledRuntime } from "./downloader.js";
 import { resolveRuntimeBundle, resolveRuntimeBundleByVersion } from "./manifest.js";
-import { getManagedManimBin, getManagedPipBin, getManagedPythonBin, getInstalledRuntimeRoot } from "./locator.js";
+import { getManagedManimBin, getManagedPipBin, getManagedPythonBin, getInstalledRuntimeRoot, getManagedRuntimeEnv } from "./locator.js";
 import { probeManagedRuntime, probeRuntimeAt } from "./probe.js";
 import { loadInstalledRuntimeState, saveInstalledRuntimeState, toRuntimeRecord } from "./versioning.js";
 
@@ -36,10 +36,11 @@ async function isInstalled(scope: string, signature: string): Promise<boolean> {
   return fileExists(await runtimeStatePath(scope, signature));
 }
 
-function runtimeEnv(runtimeRoot: string): NodeJS.ProcessEnv {
+async function runtimeEnv(runtimeRoot: string): Promise<NodeJS.ProcessEnv> {
   const modelCache = getModelCachePath();
+  const baseEnv = await getManagedRuntimeEnv(runtimeRoot);
   return {
-    ...process.env,
+    ...baseEnv,
     MANIM_CLI_RUNTIME_ROOT: runtimeRoot,
     HF_HOME: modelCache,
     HUGGINGFACE_HUB_CACHE: path.join(modelCache, "hub"),
@@ -149,7 +150,7 @@ export async function ensureProviderInstalled(provider: string, reporter?: Progr
   }
   reporter?.step("Installing provider runtime", provider);
   await execFile(await getManagedPipBin(), ["install", "-r", requirements], {
-    env: runtimeEnv(runtimeRoot),
+    env: await runtimeEnv(runtimeRoot),
     stdout: "inherit",
     stderr: "inherit"
   });
@@ -161,7 +162,7 @@ export async function runPythonBridge(args: string[], inherit = false, timeoutMs
   const runtimeRoot = await getInstalledRuntimeRoot();
   const bridge = path.resolve(getPackageRoot(), "python", "runtime_bridge.py");
   const result = await execFile(await getManagedPythonBin(), [bridge, ...args], {
-    env: runtimeEnv(runtimeRoot),
+    env: await runtimeEnv(runtimeRoot),
     stdout: inherit ? "inherit" : "pipe",
     stderr: inherit ? "inherit" : "pipe",
     timeoutMs

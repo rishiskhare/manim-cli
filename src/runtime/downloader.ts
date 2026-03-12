@@ -9,6 +9,8 @@ import * as tar from "tar";
 import { getRuntimeDownloadsPath, getRuntimeVersionsPath } from "../config/paths.js";
 import { CliError } from "../errors.js";
 import { ensureDir, fileExists, movePath, removeDir } from "../utils/fs.js";
+import { execFile } from "../utils/process.js";
+import { readJsonFile } from "../utils/fs.js";
 import type { ProgressReporter } from "../ui/progress.js";
 import type { RuntimeBundle } from "./manifest.js";
 import { getRuntimeInstallDir } from "./versioning.js";
@@ -83,6 +85,115 @@ async function normalizedExtractionRoot(destination: string): Promise<string> {
   return destination;
 }
 
+async function runCondaUnpackIfPresent(installDir: string, reporter?: ProgressReporter): Promise<void> {
+  const candidates = process.platform === "win32"
+    ? [
+      path.join(installDir, "Scripts", "conda-unpack.exe"),
+      path.join(installDir, "Scripts", "conda-unpack-script.py"),
+      path.join(installDir, "Scripts", "conda-unpack")
+    ]
+    : [path.join(installDir, "bin", "conda-unpack")];
+
+  for (const candidate of candidates) {
+    if (!(await fileExists(candidate))) {
+      continue;
+    }
+    reporter?.step("Relocating managed runtime", path.basename(candidate));
+    const args = candidate.endsWith(".py") ? [candidate] : [];
+    const command = candidate.endsWith(".py")
+      ? path.join(installDir, process.platform === "win32" ? "Scripts" : "bin", process.platform === "win32" ? "python.exe" : "python")
+      : candidate;
+    const result = await execFile(command, args, { allowFailure: true, cwd: installDir });
+    if (result.code !== 0) {
+      throw new CliError("RUNTIME_BOOTSTRAP_FAILED", "conda-unpack failed for the managed runtime.", {
+        installDir,
+        stdout: result.stdout,
+        stderr: result.stderr
+      });
+    }
+    return;
+  }
+}
+
+type RuntimeBootstrapRecipe = {
+  kind: "bootstrap";
+  platform: string;
+  pythonVersion: string;
+  manimVersion: string;
+  condaPackages: string[];
+  pipPackages: string[];
+  requirementsFiles: string[];
+};
+
+function runtimeManagerRoot(): string {
+  return path.join(getRuntimeVersionsPath(), "..", "manager");
+}
+
+async function resolveEnvironmentManager(bundleRoot: string): Promise<string> {
+  const bundledCandidates = process.platform === "win32"
+    ? [path.join(bundleRoot, "tools", "micromamba.exe")]
+    : [path.join(bundleRoot, "tools", "micromamba")];
+
+  for (const candidate of bundledCandidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  const pathEntries = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  const commandNames = process.platform === "win32"
+    ? ["micromamba.exe", "mamba.exe", "conda.exe", "micromamba", "mamba", "conda"]
+    : ["micromamba", "mamba", "conda"];
+
+  for (const entry of pathEntries) {
+    for (const commandName of commandNames) {
+      const candidate = path.join(entry, commandName);
+      if (await fileExists(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  throw new CliError("RUNTIME_BOOTSTRAP_FAILED", "No supported environment manager was found. Runtime bootstrap bundles require bundled micromamba or a local micromamba/mamba/conda installation.");
+}
+
+function runtimeManagerEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    MAMBA_ROOT_PREFIX: runtimeManagerRoot()
+  };
+}
+
+async function bootstrapRuntimeBundle(bundleRoot: string, targetDir: string, reporter?: ProgressReporter): Promise<void> {
+  const recipePath = path.join(bundleRoot, "bootstrap.json");
+  const recipe = await readJsonFile<RuntimeBootstrapRecipe>(recipePath);
+  const envManager = await resolveEnvironmentManager(bundleRoot);
+  const env = runtimeManagerEnv();
+
+  reporter?.step("Creating managed runtime", `${recipe.platform} ${recipe.manimVersion}`);
+  await removeDir(targetDir);
+  await ensureDir(path.dirname(targetDir));
+  await execFile(envManager, ["create", "-y", "-p", targetDir, "-c", "conda-forge", ...recipe.condaPackages], {
+    env,
+    stdout: "inherit",
+    stderr: "inherit"
+  });
+
+  const pipArgs = ["run", "-p", targetDir, "python", "-m", "pip", "install", ...recipe.pipPackages];
+  for (const requirement of recipe.requirementsFiles) {
+    pipArgs.push("-r", path.join(bundleRoot, requirement));
+  }
+
+  reporter?.step("Installing Python runtime packages", recipe.manimVersion);
+  await execFile(envManager, pipArgs, {
+    env,
+    stdout: "inherit",
+    stderr: "inherit"
+  });
+
+  await fsp.copyFile(path.join(bundleRoot, "runtime.json"), path.join(targetDir, "runtime.json"));
+}
+
 export async function installRuntimeBundle(bundle: RuntimeBundle, reporter?: ProgressReporter): Promise<{ installDir: string; changed: boolean }> {
   const targetDir = getRuntimeInstallDir(bundle);
   if (await fileExists(path.join(targetDir, "runtime.json"))) {
@@ -100,13 +211,19 @@ export async function installRuntimeBundle(bundle: RuntimeBundle, reporter?: Pro
   reporter?.step("Unpacking managed runtime", bundle.version);
   await extractArchive(bundle, archivePath, tempDir);
   const extractedRoot = await normalizedExtractionRoot(tempDir);
-  if (extractedRoot !== tempDir) {
-    await removeDir(targetDir);
-    await movePath(extractedRoot, targetDir);
+  if (bundle.installStrategy === "bootstrap" || await fileExists(path.join(extractedRoot, "bootstrap.json"))) {
+    await bootstrapRuntimeBundle(extractedRoot, targetDir, reporter);
     await removeDir(tempDir);
   } else {
-    await removeDir(targetDir);
-    await movePath(tempDir, targetDir);
+    if (extractedRoot !== tempDir) {
+      await removeDir(targetDir);
+      await movePath(extractedRoot, targetDir);
+      await removeDir(tempDir);
+    } else {
+      await removeDir(targetDir);
+      await movePath(tempDir, targetDir);
+    }
+    await runCondaUnpackIfPresent(targetDir, reporter);
   }
   return { installDir: targetDir, changed: true };
 }

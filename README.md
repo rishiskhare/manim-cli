@@ -23,7 +23,7 @@ This repository contains:
 
 1. `npm install -g manim-cli`
 2. `manim-cli setup`
-3. `manim-cli` downloads and verifies a platform runtime bundle that contains Manim Community, Python, native runtime dependencies, and bundled `ffmpeg` / `ffprobe` for composition
+3. `manim-cli` downloads and verifies a platform bootstrap bundle, then creates the managed runtime locally at its final install path
 
 Supported runtime targets:
 
@@ -38,4 +38,4 @@ Important detail:
 - Manim Community no longer requires an external `ffmpeg` binary for rendering itself.
 - `manim-cli` still bundles `ffmpeg` and `ffprobe` because the CLI uses them for captions, muxing, and final composition.
 
-Runtime bundles are published as GitHub Release assets and referenced by the release-generated [runtime/runtime-manifest.json](/Users/rishikhare/Desktop/manim-cli/runtime/runtime-manifest.json). That file is intentionally empty in the repo until real platform archives are built and published. See [runtime/README.md](/Users/rishikhare/Desktop/manim-cli/runtime/README.md) for the runtime archive format, provisioning commands, release asset naming, rollback policy, and clean-machine acceptance checklist.
+Runtime bootstrap bundles are published as GitHub Release assets and referenced by the release-generated [runtime/runtime-manifest.json](/Users/rishikhare/Desktop/manim-cli/runtime/runtime-manifest.json). That file is intentionally empty in the repo until real platform assets are built and published. See [runtime/README.md](/Users/rishikhare/Desktop/manim-cli/runtime/README.md) for the bootstrap-bundle format, provisioning commands, release asset naming, rollback policy, and clean-machine acceptance checklist.

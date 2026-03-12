@@ -7,7 +7,7 @@ import { execFile } from "../utils/process.js";
 import { loadStoryboard } from "../workspace/runs.js";
 import type { ProgressReporter } from "../ui/progress.js";
 import { runPythonBridge } from "../runtime/python.js";
-import { getManagedFfmpegBin } from "../runtime/locator.js";
+import { getManagedFfmpegBin, getManagedRuntimeEnv } from "../runtime/locator.js";
 
 export async function composeRun(
   runId: string,
@@ -18,6 +18,7 @@ export async function composeRun(
   const runPath = path.join(cwd, ".manim-cli", "runs", runId);
   const storyboard = await loadStoryboard(runId, cwd);
   const ffmpeg = await getManagedFfmpegBin();
+  const runtimeEnv = await getManagedRuntimeEnv();
   const concatEntries: string[] = [];
   let currentStart = 0;
   const subtitles: string[] = [];
@@ -40,6 +41,7 @@ export async function composeRun(
       if (videoDuration + 0.05 < audioDuration) {
         const pad = audioDuration - videoDuration;
         await execFile(ffmpeg, ["-y", "-i", sceneVideo, "-vf", `tpad=stop_mode=clone:stop_duration=${pad.toFixed(3)}`, "-an", paddedVideo], {
+          env: runtimeEnv,
           stdout: "inherit",
           stderr: "inherit"
         });
@@ -63,6 +65,7 @@ export async function composeRun(
             paddedAudio
           ],
           {
+            env: runtimeEnv,
             stdout: "inherit",
             stderr: "inherit"
           }
@@ -72,6 +75,7 @@ export async function composeRun(
 
       const muxed = path.join(runPath, "artifacts", `${scene.id}.muxed.mp4`);
       await execFile(ffmpeg, ["-y", "-i", paddedVideo, "-i", muxAudio, "-c:v", "copy", "-c:a", "aac", muxed], {
+        env: runtimeEnv,
         stdout: "inherit",
         stderr: "inherit"
       });
@@ -97,6 +101,7 @@ export async function composeRun(
   const outputPath = path.join(runPath, "artifacts", "final.mp4");
   reporter?.step("Muxing final video");
   await execFile(ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c", "copy", outputPath], {
+    env: runtimeEnv,
     stdout: "inherit",
     stderr: "inherit"
   });
@@ -107,15 +112,16 @@ export async function composeRun(
     if (subtitleMode === "burned") {
       const burnedPath = path.join(runPath, "artifacts", "final.captioned.mp4");
       reporter?.step("Burning captions into final video");
-      if (await ffmpegHasFilter(ffmpeg, "subtitles")) {
+      if (await ffmpegHasFilter(ffmpeg, "subtitles", runtimeEnv)) {
         await execFile(ffmpeg, ["-y", "-i", outputPath, "-vf", `subtitles=filename='${escapeFilterPath(subtitlePath)}'`, "-c:a", "copy", burnedPath], {
+          env: runtimeEnv,
           stdout: "inherit",
           stderr: "inherit"
         });
-      } else if (await ffmpegHasFilter(ffmpeg, "drawtext")) {
-        await burnCaptionsWithDrawtext(ffmpeg, outputPath, burnedPath, timedCaptions, reporter);
+      } else if (await ffmpegHasFilter(ffmpeg, "drawtext", runtimeEnv)) {
+        await burnCaptionsWithDrawtext(ffmpeg, outputPath, burnedPath, timedCaptions, runtimeEnv, reporter);
       } else {
-        await burnCaptionsWithOverlay(ffmpeg, outputPath, burnedPath, timedCaptions, runPath, reporter);
+        await burnCaptionsWithOverlay(ffmpeg, outputPath, burnedPath, timedCaptions, runPath, runtimeEnv, reporter);
       }
       return burnedPath;
     }
@@ -173,9 +179,9 @@ function escapeDrawtextText(text: string): string {
 
 let ffmpegFilterCache: string | null = null;
 
-async function ffmpegHasFilter(ffmpegBin: string, filterName: string): Promise<boolean> {
+async function ffmpegHasFilter(ffmpegBin: string, filterName: string, env: NodeJS.ProcessEnv): Promise<boolean> {
   if (ffmpegFilterCache === null) {
-    const result = await execFile(ffmpegBin, ["-filters"], { allowFailure: true });
+    const result = await execFile(ffmpegBin, ["-filters"], { allowFailure: true, env });
     ffmpegFilterCache = `${result.stdout}\n${result.stderr}`;
   }
   return new RegExp(`\\b${filterName}\\b`).test(ffmpegFilterCache);
@@ -186,6 +192,7 @@ async function burnCaptionsWithDrawtext(
   inputPath: string,
   outputPath: string,
   captions: Array<{ text: string; start: number; end: number }>,
+  env: NodeJS.ProcessEnv,
   reporter?: ProgressReporter
 ): Promise<void> {
   reporter?.status("warning", "ffmpeg subtitles filter unavailable, using drawtext fallback");
@@ -209,6 +216,7 @@ async function burnCaptionsWithDrawtext(
   }
 
   await execFile(ffmpegBin, ["-y", "-i", inputPath, "-vf", filters.join(","), "-c:a", "copy", outputPath], {
+    env,
     stdout: "inherit",
     stderr: "inherit"
   });
@@ -220,6 +228,7 @@ async function burnCaptionsWithOverlay(
   outputPath: string,
   captions: Array<{ text: string; start: number; end: number }>,
   runPath: string,
+  env: NodeJS.ProcessEnv,
   reporter?: ProgressReporter
 ): Promise<void> {
   reporter?.status("warning", "ffmpeg text filters unavailable, using generated caption overlays");
@@ -272,6 +281,7 @@ async function burnCaptionsWithOverlay(
       outputPath
     ],
     {
+      env,
       stdout: "inherit",
       stderr: "inherit"
     }

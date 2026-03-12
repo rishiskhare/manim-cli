@@ -66,6 +66,10 @@ jobs:
           cache-downloads: true
           cache-environment: false
 
+      - name: Install conda-pack
+        shell: ${{ matrix.shell }}
+        run: micromamba install -y -n base -c conda-forge conda-pack
+
       - name: Install npm dependencies
         run: npm ci
 
@@ -91,10 +95,33 @@ jobs:
           -ManimVersion ${{ inputs.manim_version }}
           -PythonVersion ${{ inputs.python_version }}
 
+      - name: Resolve micromamba path (Unix)
+        if: runner.os != 'Windows'
+        id: micromamba_unix
+        shell: bash -l {0}
+        run: echo "path=$(command -v micromamba)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve micromamba path (Windows)
+        if: runner.os == 'Windows'
+        id: micromamba_windows
+        shell: pwsh
+        run: '"path=$((Get-Command micromamba).Source)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append'
+
+      - name: Prepare runtime bootstrap bundle
+        shell: ${{ matrix.shell }}
+        run: >
+          npm run runtime:bundle --
+          --bundle-root runtime/bundle/${{ matrix.platform }}/manim-runtime
+          --platform ${{ matrix.platform }}
+          --version ${{ inputs.runtime_version }}
+          --manim-version ${{ inputs.manim_version }}
+          --python-version ${{ inputs.python_version }}
+          --micromamba-path ${{ runner.os == 'Windows' && steps.micromamba_windows.outputs.path || steps.micromamba_unix.outputs.path }}
+
       - name: Pack runtime archive
         run: >
           npm run runtime:pack --
-          --runtime-root runtime/build/${{ matrix.platform }}/manim-runtime
+          --runtime-root runtime/bundle/${{ matrix.platform }}/manim-runtime
           --platform ${{ matrix.platform }}
           --version ${{ inputs.runtime_version }}
           --archive-type ${{ matrix.archive_type }}
@@ -162,6 +189,7 @@ jobs:
           --release-tag ${{ needs.publish-archives.outputs.release_tag }}
           --version ${{ inputs.runtime_version }}
           --minimum-cli-version ${{ inputs.minimum_cli_version }}
+          --install-strategy bootstrap
           --out runtime/runtime-manifest.json
 
       - name: Validate runtime manifest

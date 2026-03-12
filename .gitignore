@@ -5,6 +5,10 @@ node_modules
 *.log
 runtime/build
 runtime/dist
+runtime/bundle
+runtime/dist-bootstrap
+runtime/dist-test2
+runtime/local-runtime-manifest*.json
 media
 .DS_Store
 __pycache__/

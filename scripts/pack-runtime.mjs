@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import * as tar from "tar";
 import AdmZip from "adm-zip";
 
@@ -26,22 +27,41 @@ if (!runtimeRoot || !platform || !version) {
 
 const absoluteRuntimeRoot = path.resolve(runtimeRoot);
 const runtimeJsonPath = path.join(absoluteRuntimeRoot, "runtime.json");
+const bootstrapJsonPath = path.join(absoluteRuntimeRoot, "bootstrap.json");
 const runtimeJson = JSON.parse(await fs.readFile(runtimeJsonPath, "utf8"));
 const expectedBinaries = ["python", "pip", "manim", "ffmpeg", "ffprobe"];
+const condaMetaPath = path.join(absoluteRuntimeRoot, "conda-meta");
+const hasBootstrapRecipe = await fs.access(bootstrapJsonPath).then(() => true).catch(() => false);
 
 for (const name of expectedBinaries) {
   if (!runtimeJson.binaries?.[name]) {
     throw new Error(`runtime.json is missing binary path for ${name}`);
   }
-  const resolved = path.join(absoluteRuntimeRoot, runtimeJson.binaries[name]);
-  await fs.access(resolved);
+  if (!hasBootstrapRecipe) {
+    const resolved = path.join(absoluteRuntimeRoot, runtimeJson.binaries[name]);
+    await fs.access(resolved);
+  }
 }
 
 await fs.mkdir(outDir, { recursive: true });
 const archiveBase = `${platform}-${version}`;
 const archivePath = path.join(outDir, `${archiveBase}.${archiveType === "zip" ? "zip" : "tar.gz"}`);
 
-if (archiveType === "zip") {
+const hasCondaMeta = await fs.access(condaMetaPath).then(() => true).catch(() => false);
+if (hasCondaMeta) {
+  execFileSync("conda-pack", [
+    "-p",
+    absoluteRuntimeRoot,
+    "-o",
+    archivePath,
+    "--format",
+    archiveType === "zip" ? "zip" : "tar.gz",
+    "--ignore-missing-files",
+    "--force"
+  ], {
+    stdio: "inherit"
+  });
+} else if (archiveType === "zip") {
   const zip = new AdmZip();
   zip.addLocalFolder(absoluteRuntimeRoot, path.basename(absoluteRuntimeRoot));
   zip.writeZip(archivePath);

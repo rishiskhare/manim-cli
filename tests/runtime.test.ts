@@ -98,6 +98,126 @@ exit 0
   return manifestPath;
 }
 
+async function createFakeBootstrapFixture(root: string, platform: string): Promise<string> {
+  const bundleRoot = path.join(root, "bootstrap-bundle");
+  const toolsDir = path.join(bundleRoot, "tools");
+  await fs.mkdir(toolsDir, { recursive: true });
+
+  const fakeManager = `#!/bin/sh
+CMD="$1"
+shift
+if [ "$CMD" = "create" ]; then
+  PREFIX=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-p" ]; then
+      PREFIX="$2"
+      shift 2
+    else
+      shift
+    fi
+  done
+  mkdir -p "$PREFIX/bin"
+  cat > "$PREFIX/bin/python" <<'EOF'
+#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "Python 3.11.0"
+  exit 0
+fi
+if [ "$1" = "-c" ]; then
+  exit 0
+fi
+exit 0
+EOF
+  cat > "$PREFIX/bin/pip" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+  cat > "$PREFIX/bin/manim" <<'EOF'
+#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "Manim Community v9.9.8"
+  exit 0
+fi
+exit 0
+EOF
+  cat > "$PREFIX/bin/ffmpeg" <<'EOF'
+#!/bin/sh
+if [ "$1" = "-version" ]; then
+  echo "ffmpeg version"
+  exit 0
+fi
+if [ "$1" = "-filters" ]; then
+  echo "subtitles drawtext"
+  exit 0
+fi
+exit 0
+EOF
+  cat > "$PREFIX/bin/ffprobe" <<'EOF'
+#!/bin/sh
+if [ "$1" = "-version" ]; then
+  echo "ffprobe version"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "$PREFIX/bin/python" "$PREFIX/bin/pip" "$PREFIX/bin/manim" "$PREFIX/bin/ffmpeg" "$PREFIX/bin/ffprobe"
+  exit 0
+fi
+if [ "$CMD" = "run" ]; then
+  exit 0
+fi
+exit 1
+`;
+
+  await writeExecutable(path.join(toolsDir, process.platform === "win32" ? "micromamba.exe" : "micromamba"), fakeManager);
+  await fs.writeFile(path.join(bundleRoot, "runtime.json"), JSON.stringify({
+    version: "9.9.8",
+    platform,
+    binaries: {
+      python: "bin/python",
+      pip: "bin/pip",
+      manim: "bin/manim",
+      ffmpeg: "bin/ffmpeg",
+      ffprobe: "bin/ffprobe"
+    },
+    features: {
+      cairo: true,
+      opengl: true
+    }
+  }, null, 2));
+  await fs.writeFile(path.join(bundleRoot, "bootstrap.json"), JSON.stringify({
+    kind: "bootstrap",
+    platform,
+    pythonVersion: "3.11",
+    manimVersion: "9.9.8",
+    condaPackages: ["python=3.11", "ffmpeg", "pip"],
+    pipPackages: [],
+    requirementsFiles: []
+  }, null, 2));
+
+  const archivePath = path.join(root, "bootstrap-runtime.tar.gz");
+  await tar.create({ gzip: true, cwd: root, file: archivePath }, ["bootstrap-bundle"]);
+  const archiveSha = crypto.createHash("sha256").update(await fs.readFile(archivePath)).digest("hex");
+  const manifestPath = path.join(root, "bootstrap-runtime-manifest.json");
+  await fs.writeFile(manifestPath, JSON.stringify({
+    channel: "stable",
+    generatedAt: new Date().toISOString(),
+    bundles: [
+      {
+        version: "9.9.8",
+        platform,
+        archiveUrl: `file://${archivePath}`,
+        sha256: archiveSha,
+        minimumCliVersion: "0.1.0",
+        archiveType: "tar.gz",
+        installStrategy: "bootstrap"
+      }
+    ]
+  }, null, 2));
+
+  return manifestPath;
+}
+
 describe("managed runtime bundles", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -183,6 +303,24 @@ describe("managed runtime bundles", () => {
     const { probeManagedRuntime } = await runtimeProbeModule();
     const probe = await probeManagedRuntime();
     expect(probe.renderers.opengl).toBe("unavailable");
+  });
+
+  test("installs a fake bootstrap bundle", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "manim-cli-runtime-"));
+    process.env.XDG_CACHE_HOME = path.join(cwd, ".cache");
+    process.env.XDG_CONFIG_HOME = path.join(cwd, ".config");
+    process.env.XDG_DATA_HOME = path.join(cwd, ".data");
+    const { getCurrentPlatform } = await runtimeManifestModule();
+    process.env.MANIM_CLI_RUNTIME_MANIFEST = await createFakeBootstrapFixture(cwd, getCurrentPlatform());
+
+    const { bootstrapRuntime } = await runtimePythonModule();
+    await bootstrapRuntime();
+
+    const { collectDoctorReport } = await runtimeDoctorModule();
+    const report = await collectDoctorReport();
+    expect(report.runtimeInstalled).toBe(true);
+    expect(report.manim).toBe(true);
+    expect(report.ffmpeg).toBe(true);
   });
 
   test("rejects invalid published bundle metadata", async () => {
