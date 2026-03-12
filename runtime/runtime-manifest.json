@@ -1,5 +1,15 @@
 {
   "channel": "stable",
-  "generatedAt": "2026-03-12T00:00:00.000Z",
-  "bundles": []
+  "generatedAt": "2026-03-12T03:43:44.876Z",
+  "bundles": [
+    {
+      "version": "0.1.1",
+      "platform": "darwin-arm64",
+      "archiveUrl": "https://github.com/rishiskhare/manim-cli/releases/download/runtime-v0.1.1/darwin-arm64-0.1.1.tar.gz",
+      "sha256": "0bb1c7258d240900c64cfc0d5cdd22447b0652aed719860b20e175002c1c3b7a",
+      "minimumCliVersion": "0.1.0",
+      "archiveType": "tar.gz",
+      "installStrategy": "bootstrap"
+    }
+  ]
 }
