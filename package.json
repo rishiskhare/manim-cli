@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "python",
-    "runtime",
+    "runtime/runtime-manifest.json",
+    "runtime/README.md",
     "schemas",
     "README.md"
   ],

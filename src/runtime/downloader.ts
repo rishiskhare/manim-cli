@@ -129,6 +129,10 @@ function runtimeManagerRoot(): string {
   return path.join(getRuntimeVersionsPath(), "..", "manager");
 }
 
+function runtimeManagerPackagesPath(): string {
+  return path.join(runtimeManagerRoot(), "pkgs");
+}
+
 async function resolveEnvironmentManager(bundleRoot: string): Promise<string> {
   const bundledCandidates = process.platform === "win32"
     ? [path.join(bundleRoot, "tools", "micromamba.exe")]
@@ -160,7 +164,8 @@ async function resolveEnvironmentManager(bundleRoot: string): Promise<string> {
 function runtimeManagerEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    MAMBA_ROOT_PREFIX: runtimeManagerRoot()
+    MAMBA_ROOT_PREFIX: runtimeManagerRoot(),
+    CONDA_PKGS_DIRS: runtimeManagerPackagesPath()
   };
 }
 
@@ -169,6 +174,8 @@ async function bootstrapRuntimeBundle(bundleRoot: string, targetDir: string, rep
   const recipe = await readJsonFile<RuntimeBootstrapRecipe>(recipePath);
   const envManager = await resolveEnvironmentManager(bundleRoot);
   const env = runtimeManagerEnv();
+  await ensureDir(runtimeManagerRoot());
+  await ensureDir(runtimeManagerPackagesPath());
 
   reporter?.step("Creating managed runtime", `${recipe.platform} ${recipe.manimVersion}`);
   await removeDir(targetDir);
