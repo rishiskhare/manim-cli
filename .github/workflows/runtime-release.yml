@@ -22,12 +22,17 @@ on:
         description: Publish as prerelease
         required: true
         default: "true"
+      include_linux_arm64:
+        description: Build the linux-arm64 runtime (requires a self-hosted ARM64 Linux runner)
+        required: true
+        default: "false"
 
 permissions:
   contents: write
 
 jobs:
   build-runtime:
+    if: ${{ matrix.platform != 'linux-arm64' || inputs.include_linux_arm64 == 'true' }}
     strategy:
       fail-fast: false
       matrix:

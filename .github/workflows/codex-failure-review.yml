@@ -1,0 +1,110 @@
+name: Codex Failure Review
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Runtime Release
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  request-codex:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Capture failed workflow logs
+        id: logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! gh run view "$RUN_ID" --repo "$REPO" --log-failed > failed.log 2>/dev/null; then
+            gh run view "$RUN_ID" --repo "$REPO" --log > failed.log
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("failed.log").read_text(errors="ignore").strip()
+          if not text:
+              text = "No workflow log output was captured."
+          lines = text.splitlines()[-200:]
+          excerpt = "\n".join(lines)
+          limit = 12000
+          if len(excerpt) > limit:
+              excerpt = excerpt[-limit:]
+          Path("failed-excerpt.txt").write_text(excerpt)
+          PY
+
+      - name: Build Codex prompt
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ github.event.workflow_run.event }}
+        run: |
+          {
+            echo "@codex Investigate and fix this failed GitHub Actions run."
+            echo
+            echo "- Workflow: ${WORKFLOW_NAME}"
+            echo "- Run number: ${RUN_NUMBER}"
+            echo "- Run URL: ${RUN_URL}"
+            echo "- Event: ${EVENT_NAME}"
+            echo "- Branch: ${HEAD_BRANCH}"
+            echo "- Commit: ${HEAD_SHA}"
+            echo
+            echo "Please:"
+            echo "1. inspect the failure,"
+            echo "2. reproduce it in the repository,"
+            echo "3. make the minimal robust fix,"
+            echo "4. add or update tests if needed,"
+            echo "5. open a PR with the fix."
+            echo
+            echo "Failed log excerpt:"
+            echo
+            echo '```text'
+            cat failed-excerpt.txt
+            echo
+            echo '```'
+          } > codex-comment.md
+
+      - name: Post Codex request to PR or issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            const body = fs.readFileSync("codex-comment.md", "utf8");
+            const run = context.payload.workflow_run;
+            const pulls = run.pull_requests || [];
+
+            if (pulls.length > 0) {
+              const pr = pulls[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+              core.info(`Posted Codex request to PR #${pr.number}`);
+              return;
+            }
+
+            const title = `Codex fix request: ${run.name} failed on ${run.head_branch || "unknown-branch"}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+            });
+            core.info("Opened issue for failed workflow run");

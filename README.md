@@ -39,3 +39,13 @@ Important detail:
 - `manim-cli` still bundles `ffmpeg` and `ffprobe` because the CLI uses them for captions, muxing, and final composition.
 
 Runtime bootstrap bundles are published as GitHub Release assets and referenced by the release-generated [runtime/runtime-manifest.json](/Users/rishikhare/Desktop/manim-cli/runtime/runtime-manifest.json). That file is intentionally empty in the repo until real platform assets are built and published. See [runtime/README.md](/Users/rishikhare/Desktop/manim-cli/runtime/README.md) for the bootstrap-bundle format, provisioning commands, release asset naming, rollback policy, and clean-machine acceptance checklist.
+
+## GitHub automation
+
+This repo ships with:
+
+- [CI](/Users/rishikhare/Desktop/manim-cli/.github/workflows/ci.yml) for `npm ci`, `npm run build`, and `npm test`
+- [Runtime Release](/Users/rishikhare/Desktop/manim-cli/.github/workflows/runtime-release.yml) for publishing managed runtime bundles
+- [Codex Failure Review](/Users/rishikhare/Desktop/manim-cli/.github/workflows/codex-failure-review.yml) for automatically tagging `@codex` on failed CI or runtime-release runs
+
+To make Codex respond automatically, connect the repository to Codex in GitHub/ChatGPT first. The official Codex docs state that Codex can be triggered from GitHub and by tagging `@codex` in GitHub comments: [Codex cloud docs](https://platform.openai.com/docs/codex).
