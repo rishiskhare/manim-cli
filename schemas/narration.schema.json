@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NarrationConfig",
+  "type": "object",
+  "properties": {
+    "provider": { "type": "string" },
+    "voice": { "type": "string" },
+    "language": { "type": "string" },
+    "speed": { "type": "number" },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "voice": { "type": "string" },
+          "voiceProfile": { "type": "string" },
+          "language": { "type": "string" },
+          "provider": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+chatterbox-tts>=0.1.6
+torchaudio>=2.6.0

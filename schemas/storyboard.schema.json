@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Storyboard",
+  "type": "object",
+  "required": ["title", "audience", "style", "aspectRatio", "scenes"],
+  "properties": {
+    "title": { "type": "string" },
+    "audience": { "type": "string" },
+    "style": { "type": "string" },
+    "aspectRatio": { "type": "string" },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "goal", "narrationText", "targetDurationSec", "visualBrief", "manimSceneClass"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "goal": { "type": "string" },
+          "narrationText": { "type": "string" },
+          "targetDurationSec": { "type": "number" },
+          "visualBrief": { "type": "string" },
+          "manimSceneClass": { "type": "string" },
+          "language": { "type": "string" },
+          "provider": { "type": "string" }
+        }
+      }
+    }
+  }
+}

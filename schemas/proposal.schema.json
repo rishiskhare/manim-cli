@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proposal",
+  "type": "object",
+  "required": ["title", "audience", "learningGoal", "estimatedDurationSec", "difficulty", "sections"],
+  "properties": {
+    "title": { "type": "string" },
+    "audience": { "type": "string" },
+    "learningGoal": { "type": "string" },
+    "estimatedDurationSec": { "type": "number" },
+    "difficulty": {
+      "type": "string",
+      "enum": ["beginner", "intermediate", "advanced"]
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "purpose",
+          "conceptsCovered",
+          "targetDurationSec",
+          "visualPlan",
+          "narrationSummary",
+          "prerequisites",
+          "qualityChecks"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "conceptsCovered": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "targetDurationSec": { "type": "number" },
+          "visualPlan": { "type": "string" },
+          "narrationSummary": { "type": "string" },
+          "prerequisites": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "qualityChecks": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

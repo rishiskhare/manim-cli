@@ -1,0 +1,9 @@
+dist
+node_modules
+.manim-cli
+.coverage
+*.log
+runtime/build
+runtime/dist
+media
+.DS_Store
