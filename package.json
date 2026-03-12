@@ -4,7 +4,7 @@
   "description": "Production-ready npm wrapper for Manim Community with agent workflows and multi-provider TTS",
   "type": "module",
   "bin": {
-    "manim-cli": "./dist/bin.js"
+    "manim-cli": "dist/bin.js"
   },
   "files": [
     "dist",
