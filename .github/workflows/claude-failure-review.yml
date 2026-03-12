@@ -1,4 +1,4 @@
-name: Codex Failure Review
+name: Claude Failure Review
 
 on:
   workflow_run:
@@ -15,12 +15,12 @@ permissions:
   pull-requests: write
 
 jobs:
-  request-codex:
+  request-claude:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Capture failed workflow logs
-        id: logs
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
@@ -35,18 +35,15 @@ jobs:
           text = Path("failed.log").read_text(errors="ignore").strip()
           if not text:
               text = "No workflow log output was captured."
-          lines = text.splitlines()[-200:]
-          excerpt = "\n".join(lines)
-          limit = 12000
-          if len(excerpt) > limit:
-              excerpt = excerpt[-limit:]
+          excerpt = "\n".join(text.splitlines()[-200:])
+          if len(excerpt) > 12000:
+              excerpt = excerpt[-12000:]
           Path("failed-excerpt.txt").write_text(excerpt)
           PY
 
-      - name: Build Codex prompt
+      - name: Build Claude request
         env:
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -54,7 +51,7 @@ jobs:
           EVENT_NAME: ${{ github.event.workflow_run.event }}
         run: |
           {
-            echo "@codex Investigate and fix this failed GitHub Actions run."
+            echo "@claude investigate this failed GitHub Actions run and propose or implement the minimal robust fix."
             echo
             echo "- Workflow: ${WORKFLOW_NAME}"
             echo "- Run number: ${RUN_NUMBER}"
@@ -76,15 +73,15 @@ jobs:
             cat failed-excerpt.txt
             echo
             echo '```'
-          } > codex-comment.md
+          } > claude-comment.md
 
-      - name: Post Codex request to PR or issue
+      - name: Post Claude request to PR or issue
         uses: actions/github-script@v7
         with:
           github-token: ${{ github.token }}
           script: |
             const fs = require("fs");
-            const body = fs.readFileSync("codex-comment.md", "utf8");
+            const body = fs.readFileSync("claude-comment.md", "utf8");
             const run = context.payload.workflow_run;
             const pulls = run.pull_requests || [];
 
@@ -96,11 +93,11 @@ jobs:
                 issue_number: pr.number,
                 body,
               });
-              core.info(`Posted Codex request to PR #${pr.number}`);
+              core.info(`Posted Claude request to PR #${pr.number}`);
               return;
             }
 
-            const title = `Codex fix request: ${run.name} failed on ${run.head_branch || "unknown-branch"}`;
+            const title = `Claude fix request: ${run.name} failed on ${run.head_branch || "unknown-branch"}`;
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
