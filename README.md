@@ -46,14 +46,13 @@ This repo ships with:
 
 - [CI](/Users/rishikhare/Desktop/manim-cli/.github/workflows/ci.yml) for `npm ci`, `npm run build`, and `npm test`
 - [Runtime Release](/Users/rishikhare/Desktop/manim-cli/.github/workflows/runtime-release.yml) for publishing managed runtime bundles
-- [Claude Code Review](/Users/rishikhare/Desktop/manim-cli/.github/workflows/claude-code-review.yml) for automatic PR review
-- [Claude Mentions](/Users/rishikhare/Desktop/manim-cli/.github/workflows/claude-mentions.yml) for handling `@claude` comments on PRs and issues
-- [Claude Failure Review](/Users/rishikhare/Desktop/manim-cli/.github/workflows/claude-failure-review.yml) for automatically tagging `@claude` on failed CI or runtime-release runs
-
-Anthropic’s official GitHub Actions integration uses `anthropics/claude-code-action@v1`, supports automatic PR review on `pull_request`, and responds to `@claude` mentions in PR or issue comments. It also recommends a repository-level `CLAUDE.md` to guide review behavior: [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions).
+- [OpenAI PR Review](/Users/rishikhare/Desktop/manim-cli/.github/workflows/openai-pr-review.yml) for automatic pull request analysis using the OpenAI API
+- [OpenAI Failure Review](/Users/rishikhare/Desktop/manim-cli/.github/workflows/openai-failure-review.yml) for automatic failed-build analysis using the OpenAI API
 
 Setup required before these workflows will work:
 
-1. Install the Claude GitHub app on this repository: [github.com/apps/claude](https://github.com/apps/claude)
-2. Add `ANTHROPIC_API_KEY` to GitHub Actions secrets
-3. Re-run the workflow or tag `@claude` in a PR comment
+1. Add `OPENAI_API_KEY` to GitHub Actions secrets
+2. Optionally add a repository variable `OPENAI_REVIEW_MODEL`
+3. Re-run the workflow
+
+These workflows use the OpenAI Responses API and default to `gpt-5-codex`, which OpenAI documents as a coding-optimized model available in the Responses API. OpenAI also documents Codex SDK/API use in CI/CD contexts and shows Responses API examples that read `OPENAI_API_KEY` from the environment: [Code generation guide](https://platform.openai.com/docs/guides/code-generation), [GPT-5-Codex model](https://platform.openai.com/docs/models/gpt-5-codex), [API libraries/auth setup](https://platform.openai.com/docs/libraries).

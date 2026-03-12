@@ -1,4 +1,4 @@
-name: Claude Failure Review
+name: OpenAI Failure Review
 
 on:
   workflow_run:
@@ -15,11 +15,17 @@ permissions:
   pull-requests: write
 
 jobs:
-  request-claude:
+  analyze-failure:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Capture failed workflow logs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -35,53 +41,36 @@ jobs:
           text = Path("failed.log").read_text(errors="ignore").strip()
           if not text:
               text = "No workflow log output was captured."
-          excerpt = "\n".join(text.splitlines()[-200:])
-          if len(excerpt) > 12000:
-              excerpt = excerpt[-12000:]
+          excerpt = "\n".join(text.splitlines()[-250:])
+          if len(excerpt) > 20000:
+              excerpt = excerpt[-20000:]
           Path("failed-excerpt.txt").write_text(excerpt)
           PY
 
-      - name: Build Claude request
+      - name: Generate failure analysis
         env:
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          EVENT_NAME: ${{ github.event.workflow_run.event }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_REVIEW_MODEL: ${{ vars.OPENAI_REVIEW_MODEL || 'gpt-5-codex' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          GITHUB_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          GITHUB_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          GITHUB_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GITHUB_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_EVENT_NAME: ${{ github.event.workflow_run.event }}
         run: |
-          {
-            echo "@claude investigate this failed GitHub Actions run and propose or implement the minimal robust fix."
-            echo
-            echo "- Workflow: ${WORKFLOW_NAME}"
-            echo "- Run number: ${RUN_NUMBER}"
-            echo "- Run URL: ${RUN_URL}"
-            echo "- Event: ${EVENT_NAME}"
-            echo "- Branch: ${HEAD_BRANCH}"
-            echo "- Commit: ${HEAD_SHA}"
-            echo
-            echo "Please:"
-            echo "1. inspect the failure,"
-            echo "2. reproduce it in the repository,"
-            echo "3. make the minimal robust fix,"
-            echo "4. add or update tests if needed,"
-            echo "5. open a PR with the fix."
-            echo
-            echo "Failed log excerpt:"
-            echo
-            echo '```text'
-            cat failed-excerpt.txt
-            echo
-            echo '```'
-          } > claude-comment.md
+          node scripts/openai-review.mjs \
+            --mode failure-review \
+            --input-file failed-excerpt.txt \
+            --output-file review.md
 
-      - name: Post Claude request to PR or issue
+      - name: Post analysis to PR or issue
         uses: actions/github-script@v7
         with:
           github-token: ${{ github.token }}
           script: |
             const fs = require("fs");
-            const body = fs.readFileSync("claude-comment.md", "utf8");
+            const body = fs.readFileSync("review.md", "utf8");
             const run = context.payload.workflow_run;
             const pulls = run.pull_requests || [];
 
@@ -93,11 +82,11 @@ jobs:
                 issue_number: pr.number,
                 body,
               });
-              core.info(`Posted Claude request to PR #${pr.number}`);
+              core.info(`Posted OpenAI analysis to PR #${pr.number}`);
               return;
             }
 
-            const title = `Claude fix request: ${run.name} failed on ${run.head_branch || "unknown-branch"}`;
+            const title = `OpenAI build analysis: ${run.name} failed on ${run.head_branch || "unknown-branch"}`;
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
