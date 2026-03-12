@@ -1,6 +1,6 @@
 {
   "name": "manim-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Production-ready npm wrapper for Manim Community with agent workflows and multi-provider TTS",
   "type": "module",
   "bin": {
